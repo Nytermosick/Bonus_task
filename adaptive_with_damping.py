@@ -116,52 +116,29 @@ def joint_controller(q: np.ndarray, dq: np.ndarray, p_hat, t: float) -> np.ndarr
 
     dt = 0.002
 
-    q_des = np.array([[-1.4], # column-vector of desired joint positions
-                      [-1.5708],
-                      [1.5708],
-                      [0.],
-                      [0.],
-                      [1.57] # np.sin(2 * np.pi * t) for trajectory
-                     ])
+    q_des = np.array([-1.4, -1.5708, 1.5708, 0., 0., 0.]) # np.sin(2 * np.pi * t) in last link for trajectory
     
-    dq_des = np.array([[0.], # column-vector of desired joint velocities
-                       [0.],
-                       [0.],
-                       [0.],
-                       [0.],
-                       [0.] # 2* np.pi * np.cos(2 * np.pi * t) for trajectory
-                      ])
+    dq_des = np.array([0., 0., 0., 0., 0., 0.]) # np.sin(2 * np.pi * t) in last link for trajectory
     
-    ddq_des = np.array([[0], # column-vector of desired joint accelerations          
-                        [0],             
-                        [0],             
-                        [0],
-                        [0],
-                        [0.], # -4 * np.pi**2 * np.sin(2 * np.pi * t) for trajectory
-                       ])
+    ddq_des = np.array([0., 0., 0., 0., 0., 0.]) # np.sin(2 * np.pi * t) in last link for trajectory
 
     k = np.diag([20, 20, 40, 40, 30, 15])
 
     #errors
-    q_err = q_des - q.reshape(-1,1) # column-vector of position error
+    q_err = q_des - q # position error
     print('q_err\n' , q_err)
 
-    dq_err = dq_des - dq.reshape(-1,1) # column-vector of velocities error
+    dq_err = dq_des - dq # velocities error
 
     lambd = 5
     s = dq_err + lambd * q_err # sliding surface
 
-    dq_ref = dq_des.flatten() + lambd * q_err.flatten() # row-vector of reference velocity
-    ddq_ref = ddq_des.flatten() + lambd * dq_err.flatten() + (k @ s).flatten() # row-vector of reference acceleration
+    dq_ref = dq_des + lambd * q_err # reference velocity
+    ddq_ref = ddq_des + lambd * dq_err + k @ s # reference acceleration
 
     regressor = pin.computeJointTorqueRegressor(model, data, q, dq_ref, ddq_ref) # regression matrix of system dynamic 6x60
 
-
-    regressor_damping = np.array([[0] * 6] * 6) # empty matrix for damping regression matrix 6x6
-
-    for i in range(6):
-        regressor_damping[i, i] = -dq_ref[i] # filling of damping regression matrix by reference velocity
-
+    regressor_damping = np.diag(-dq_ref) # damping regression matrix 6x6
 
     regressor_damping_with_6link_params = np.hstack([regressor_damping, regressor[:, 50:]]) # regressor matrix for unknown parameters
                                                                                             # including damping and 10 last parameters of last link 6x16
@@ -178,16 +155,16 @@ def joint_controller(q: np.ndarray, dq: np.ndarray, p_hat, t: float) -> np.ndarr
     for i in range(1, 5):
         state_vector = np.hstack([state_vector, model.inertias[i].toDynamicParameters()])
 
-    state_vector = np.vstack([p_hat[:6, :], state_vector.reshape(-1, 1), p_hat[6:, ]]) # column-vector state vector with predicted damping in begin
-                                                                                       # and last predicted parameters of last link in the end 66x1
-    #print(state_vector)
+    state_vector = np.hstack([p_hat[:6], state_vector, p_hat[6:]]) # column-vector state vector with predicted damping in begin
+                                                                   # and last predicted parameters of last link in the end 66x1
 
+    #print(state_vector)
     #print('p_hat\n', p_hat)
     #print('p_dot_hat', p_dot_hat)
 
-    u = regressor @ state_vector #+ k @ s # control law 6x1
+    u = regressor @ state_vector # + k @ s # control law
 
-    return u.flatten(), p_hat, q_err.flatten() # transformation to row-vector
+    return u, p_hat, q_err
 
 def main():
 
