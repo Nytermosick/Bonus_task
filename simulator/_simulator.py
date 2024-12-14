@@ -398,7 +398,7 @@ class Simulator:
             pin_model = pin.buildModelFromMJCF('/home/gleb/.mujoco/forc/hw/mujoco_template/robots/universal_robots_ur5e/ur5e.xml')
             pin_data = pin_model.createData()
 
-            p_hat = np.zeros(10).reshape(-1, 1)
+            p_hat = np.zeros(10)
             self.times = []
             self.real_state = []
             self.estimated_state = []
